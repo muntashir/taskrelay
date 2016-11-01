@@ -140,10 +140,10 @@ class Server:
 
     def __add_to_welcome_message(self, function_def):
         self.welcome_message += b'|n:' + function_def['name'].encode()
-        for input in function_def['inputs']:
-            self.welcome_message += b';i:' + input[0].encode() + b',t:' + input[1].encode()
-        for output in function_def['outputs']:
-            self.welcome_message += b';o:' + output[0].encode() + b',t:' + output[1].encode()
+        for input, input_type in function_def['inputs'].items():
+            self.welcome_message += b';i:' + input.encode() + b',t:' + input_type.encode()
+        for output, output_type in function_def['outputs'].items():
+            self.welcome_message += b';o:' + output.encode() + b',t:' + output_type.encode()
 
     async def __handler(self, websocket, _):
         await websocket.send(self.welcome_message)
@@ -181,33 +181,3 @@ class Server:
     def start_server(self, ip, port):
         asyncio.get_event_loop().run_until_complete(websockets.serve(self.__handler, ip, port, max_size=None))
         asyncio.get_event_loop().run_forever()
-
-def classify_jpg(image):
-    for i in range(1000000):
-        continue
-    return {'label': 'test_label'}
-
-def classify_png(image):
-    for i in range(1000000):
-        continue
-    return {'label': 'test_label'}
-
-def test():
-    servicer = Server()
-
-    servicer.add_function(
-        name = 'classify_jpg',
-        inputs = {'image': 'jpg'},
-        outputs = {'label': 'string'},
-        function = classify_jpg)
-
-    servicer.add_function(
-        name = 'classify_png',
-        inputs = {'image': 'png'},
-        outputs = {'label': 'string'},
-        function = classify_png)
-
-    servicer.start_server('localhost', 1234)
-
-if __name__ == '__main__':
-    test() 
