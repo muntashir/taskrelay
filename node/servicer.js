@@ -2,14 +2,71 @@ const WebSocket = require('ws');
 
 class Client {
   constructor(serverList) {
+    this.functions = {};
+    this.isConnected = false;
     this.serverList = serverList;
     shuffleArray(this.serverList);
-    this.isConnected = false;
   }
 
   responseHandler(data, flags) {
     if (flags.binary) {
 
+    }
+  }
+
+  decodeHeader(header) {
+    const decodedData = binaryToString(header).split('|');
+
+    if (decodedData[0] === '@w') {
+      const headerSizeParam = decodedData[1].split(':');
+
+      if (headerSizeParam[0] === 'h') {
+        this.headerSize = parseInt(headerSizeParam[1], 10);
+
+        for (let i = 2; i < decodedData.length; i++) {
+          const functionMultiParams = decodedData[i].split(';');
+          const functionInputs = [];
+          const functionOutputs = [];
+          let functionName = '';
+
+          for (let j = 0; j < functionMultiParams.length; j++) {
+            const functionParams = functionMultiParams[j].split(',');
+            const multiParam = {};
+
+            for (let k = 0; k < functionParams.length; k++) {
+              const functionParam = functionParams[k].split(':');
+              multiParam[functionParam[0]] = functionParam[1];
+            }
+
+            if (multiParam.hasOwnProperty('i') && multiParam.hasOwnProperty('t')) {
+              const inputName = multiParam['i'];
+              const inputType = multiParam['t'];
+              functionInputs.push({
+                inputName: inputType
+              });
+            } else if (multiParam.hasOwnProperty('o') && multiParam.hasOwnProperty('t')) {
+              const outputName = multiParam['o'];
+              const outputType = multiParam['t'];
+              functionOutputs.push({
+                outputName: outputType
+              });
+            } else if (multiParam.hasOwnProperty('n')) {
+              functionName = multiParam['n'];
+            } else {
+              console.log('Invalid header parameter received')
+            }
+          }
+
+          this.functions[functionName] = {
+            inputs: functionInputs,
+            outputs: functionOutputs
+          };
+        }
+      } else {
+        console.log('Invalid header size parameter received');
+      }
+    } else {
+      console.log('Invalid welcome message received');
     }
   }
 
@@ -32,10 +89,15 @@ class Client {
           that.isConnected = true;
           console.log(`[${ws.url}] - Connected`);
           ws.on('message', that.responseHandler);
-          that.ws = ws;
 
-          const decodedData = binaryToString(data);
-          console.log(binaryToString(data));
+          that.ws = ws;
+          that.decodeHeader(data);
+          ws.on('message', that.responseHandler);
+
+          cb({
+            url: ws.url,
+            functions: that.functions
+          });
         }
 
         ws = null;
