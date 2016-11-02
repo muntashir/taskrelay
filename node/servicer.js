@@ -2,19 +2,20 @@ const WebSocket = require('ws');
 
 class Client {
   constructor(serverList) {
+    this.callback = null;
     this.functions = {};
     this.isConnected = false;
     this.serverList = serverList;
     shuffleArray(this.serverList);
   }
 
-  responseHandler(data, flags) {
+  _responseHandler(data, flags) {
     if (flags.binary) {
 
     }
   }
 
-  decodeHeader(header) {
+  _decodeHeader(header) {
     const decodedData = binaryToString(header).split('|');
 
     if (decodedData[0] === '@w') {
@@ -25,8 +26,8 @@ class Client {
 
         for (let i = 2; i < decodedData.length; i++) {
           const functionMultiParams = decodedData[i].split(';');
-          const functionInputs = [];
-          const functionOutputs = [];
+          const functionInputs = {};
+          const functionOutputs = {};
           let functionName = '';
 
           for (let j = 0; j < functionMultiParams.length; j++) {
@@ -41,15 +42,11 @@ class Client {
             if (multiParam.hasOwnProperty('i') && multiParam.hasOwnProperty('t')) {
               const inputName = multiParam['i'];
               const inputType = multiParam['t'];
-              functionInputs.push({
-                inputName: inputType
-              });
+              functionInputs[inputName] = inputType;
             } else if (multiParam.hasOwnProperty('o') && multiParam.hasOwnProperty('t')) {
               const outputName = multiParam['o'];
               const outputType = multiParam['t'];
-              functionOutputs.push({
-                outputName: outputType
-              });
+              functionOutputs[outputName] = outputType;
             } else if (multiParam.hasOwnProperty('n')) {
               functionName = multiParam['n'];
             } else {
@@ -57,10 +54,14 @@ class Client {
             }
           }
 
-          this.functions[functionName] = {
-            inputs: functionInputs,
-            outputs: functionOutputs
-          };
+          if (functionName && functionInputs && functionOutputs) {
+            this.functions[functionName] = {
+              inputs: functionInputs,
+              outputs: functionOutputs
+            };
+          } else {
+            console.log('Invalid function definition received');
+          }
         }
       } else {
         console.log('Invalid header size parameter received');
@@ -72,6 +73,8 @@ class Client {
 
   connect(cb) {
     for (let i = 0; i < this.serverList.length; i++) {
+      this.socketErrorCount = 0;
+
       const that = this;
       const ip = this.serverList[i][0];
       const port = this.serverList[i][1];
@@ -80,6 +83,10 @@ class Client {
 
       ws.on('error', err => {
         console.log(`[ws://${err.address}:${err.port}] - ${err.code}`);
+        this.socketErrorCount++;
+        if (this.socketErrorCount === this.serverList.length) {
+          cb('No servers reachable', null);
+        }
       });
 
       ws.on('message', function receiveHeader(data, flags) {
@@ -88,13 +95,12 @@ class Client {
         if (!that.isConnected && flags.binary) {
           that.isConnected = true;
           console.log(`[${ws.url}] - Connected`);
-          ws.on('message', that.responseHandler);
+          ws.on('message', that._responseHandler);
 
           that.ws = ws;
-          that.decodeHeader(data);
-          ws.on('message', that.responseHandler);
+          that._decodeHeader(data);
 
-          cb({
+          cb(null, {
             url: ws.url,
             functions: that.functions
           });
@@ -105,11 +111,28 @@ class Client {
     }
   }
 
-  call(params) {
-    ws.send(stringToBinary('Hello'), {
-      binary: true,
-      mask: true
-    });
+  callFunction(functionName, functionInputs, cb) {
+    if (this.functions.hasOwnProperty(functionName)) {
+      const functionInputKeys = Object.keys(functionInputs);
+
+      for (let i = 0; i < functionInputKeys.length; i++) {
+        const inputName = functionInputKeys[i];
+        const inputType = functionInputs[inputName];
+
+        if (this.functions[functionName].inputs.hasOwnProperty(inputName)) {
+
+        } else {
+          cb('Invalid function input', null);
+        }
+      }
+    } else {
+      cb('Invalid function input', null);
+    }
+
+    // this.ws.send(stringToBinary('Hello'), {
+    //   binary: true,
+    //   mask: true
+    // });
   }
 }
 
