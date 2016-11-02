@@ -78,7 +78,7 @@ class Server:
 
     async def __build_output_packet(self, outputs, packet_name):
         output_schema = self.functions[packet_name]['outputs']
-        packet_header = b'@r|o:' + packet_name.encode()
+        packet_header = b'@r|n:' + packet_name.encode()
         output_packet = b''
 
         for output_name, raw_value in outputs.items():
