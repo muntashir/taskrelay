@@ -15,13 +15,13 @@ def test():
 
     server.add_function(
         name = 'classify_jpg',
-        inputs = {'image': 'jpg'},
+        inputs = {'image': 'binary'},
         outputs = {'label': 'string'},
         function = classify_jpg)
 
     server.add_function(
         name = 'classify_png',
-        inputs = {'image': 'png'},
+        inputs = {'image': 'binary'},
         outputs = {'label': 'string'},
         function = classify_png)
 

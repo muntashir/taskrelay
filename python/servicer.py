@@ -2,16 +2,16 @@ import asyncio
 import websockets
 
 class Server:
-    def __init__(self, header_size=32):
+    def __init__(self, header_size=64):
         self.welcome_message = b'@w|h:' + str(header_size).encode()
         self.header_size = header_size
         self.functions = {}
-        self.is_busy = False
         self.bytes_read = 0
 
     async def __get_job_info(request):
-        function_name = None
+        packet_name = None
         packet_size = None
+        packet_id = None
 
         sections = request[0:self.header_size + 1].decode('ascii').split('|')
 
@@ -22,14 +22,15 @@ class Server:
                 parameter_tuple = parameter.split(':')
 
                 if parameter_tuple[0] == 'n':
-                    function_name = parameter_tuple[1]
+                    packet_name = parameter_tuple[1]
                 elif parameter_tuple[0] == 's':
                     packet_size = int(parameter_tuple[1])
+                elif parameter_tuple[0] == 'd':
+                    packet_id = parameter_tuple[1]
                 else:
                     print('Invalid header parameter sent')
 
-        self.bytes_read += self.header_size
-        return (function_name, packet_size)
+        return (packet_name, packet_size, packet_id)
 
     async def __get_inputs(request, packet_name):
         input_schema = self.functions[packet_name]['inputs']
@@ -68,28 +69,73 @@ class Server:
                 offset += input_size + 1
                 bytes_read += input_size
 
-                input_data = request[end_pos:input_size + 1]
-                inputs[input_name] = input_data
+                raw_input_data = request[end_pos:input_size + 1]
+                input_data = None
+
+                if input_type == 'string':
+                    input_data = raw_input_data.decode('ascii')
+                if input_type == 'binary':
+                    input_data = raw_input_data
+                if input_type == 'integer':
+                    input_data = int(raw_input_data)
+                if input_type == 'float':
+                    input_data = float(raw_input_data)
+                if input_type == 'boolean':
+                    input_data = bool(raw_input_data)
+
+                if input_data:
+                    inputs[input_name] = input_data
+                else:
+                    print('Invalid input type')
+                    return(None, None)
             else:
                 print('Missing input parameter')
                 return (None, None)
 
         return (inputs, bytes_read)
 
-    async def __build_output_packet(self, outputs, packet_name):
+    async def __build_output_packet(self, outputs, packet_name, packet_id):
         output_schema = self.functions[packet_name]['outputs']
-        packet_header = b'@r|n:' + packet_name.encode()
+        packet_header = b'@r|n:' + packet_name.encode() + b',d:' + packet_id.encode()
         output_packet = b''
 
         for output_name, raw_value in outputs.items():
             if output_name in output_schema:
+                type_schema = output_name[output_schema]
                 output_value = None
-                if type(raw_value) is str:
-                    output_value = raw_value.encode()
-                if type(raw_value) is bytes:
-                    output_value = raw_value
+                if type_schema == 'string':
+                    if type(raw_value) is str:
+                        output_value = raw_value.encode()
+                    else:
+                        print('Output value does not match schema')
+                        return None
+                if type_schema == 'binary':
+                    if type(raw_value) is bytes:
+                        output_value = raw_value
+                    else:
+                        print('Output value does not match schema')
+                        return None
+                if type_schema == 'integer':
+                    if type(raw_value) is int:
+                        output_value = str(raw_value).encode()
+                    else:
+                        print('Output value does not match schema')
+                        return 
+                if type_schema == 'float':
+                    if type(raw_value) is float:
+                        output_value = str(raw_value).encode()
+                    else:
+                        print('Output value does not match schema')
+                        return None
+                if type_schema == 'boolean':
+                    if type(raw_value) is bool:
+                        output_value = str(int(raw_value)).encode()
+                    else:
+                        print('Output value does not match schema')
+                        return None
                 else:
-                    output_value = str(raw_value).encode()
+                    print('Output schema invalid')
+                    return None
 
                 output_header = b'o:' + output_name.encode()
                 output_header += b',t:' + output_schema[output_name].encode()
@@ -114,33 +160,29 @@ class Server:
             return output_packet
 
     async def __process_incoming_message(self, request):
-        if self.is_busy:
-            return b'@e|m:busy'
-        else:
-            self.is_busy = True
+        packet_name, packet_size, packet_id = await self.__get_job_info(request)
+        if not packet_name or not packet_size or not packet_id:
+            return b'@e|m:invalid_job_request'
 
-            packet_name, packet_size = await self.__get_job_info(request)
-            if not function_name or not packet_size:
-                return b'@e|m:invalid_job_request'
+        inputs, bytes_read = await self.__get_inputs(request, packet_name)
+        if not inputs or bytes_read:
+            return b'@e|m:invalid_inputs'
 
-            inputs, bytes_read = await self.__get_inputs(request, packet_name)
-            if not inputs or bytes_read:
-                return b'@e|m:invalid_inputs'
+        if (bytes_read + self.header_size != packet_size):
+            return b'@e|m:invalid_packet_size'
 
-            if (bytes_read + self.header_size != packet_size):
-                return b'@e|m:invalid_packet_size'
+        outputs = self.functions[packet_name]['function'](**inputs)
+        output_packet = await self.__build_output_packet(outputs, packet_name, packet_id)
+        if not output_packet:
+            return b'@e|m:server_function_error'
 
-            outputs = self.functions[packet_name]['function'](**inputs)
-            output_packet = await self.__build_output_packet(outputs, packet_name)
-            if not output_packet:
-                return b'@e|m:server_function_error'
-
-            self.is_busy = False
-            return output_packet
+        return output_packet
 
     def __add_to_welcome_message(self, function_def):
         self.welcome_message += b'|n:' + function_def['name'].encode()
         for input, input_type in function_def['inputs'].items():
+            if input_type not in ['string', 'boolean', 'integer', 'float', 'binary']:
+                print('Invalid input type')
             self.welcome_message += b';i:' + input.encode() + b',t:' + input_type.encode()
         for output, output_type in function_def['outputs'].items():
             self.welcome_message += b';o:' + output.encode() + b',t:' + output_type.encode()
