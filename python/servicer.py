@@ -74,13 +74,13 @@ class Server:
 
                 if input_type == 'string':
                     input_data = raw_input_data.decode('ascii')
-                if input_type == 'binary':
+                elif input_type == 'binary':
                     input_data = raw_input_data
-                if input_type == 'integer':
+                elif input_type == 'integer':
                     input_data = int(raw_input_data)
-                if input_type == 'float':
+                elif input_type == 'float':
                     input_data = float(raw_input_data)
-                if input_type == 'boolean':
+                elif input_type == 'boolean':
                     input_data = bool(raw_input_data)
 
                 if input_data:
@@ -109,25 +109,25 @@ class Server:
                     else:
                         print('Output value does not match schema')
                         return None
-                if type_schema == 'binary':
+                elif type_schema == 'binary':
                     if type(raw_value) is bytes:
                         output_value = raw_value
                     else:
                         print('Output value does not match schema')
                         return None
-                if type_schema == 'integer':
+                elif type_schema == 'integer':
                     if type(raw_value) is int:
                         output_value = str(raw_value).encode()
                     else:
                         print('Output value does not match schema')
                         return 
-                if type_schema == 'float':
+                elif type_schema == 'float':
                     if type(raw_value) is float:
                         output_value = str(raw_value).encode()
                     else:
                         print('Output value does not match schema')
                         return None
-                if type_schema == 'boolean':
+                elif type_schema == 'boolean':
                     if type(raw_value) is bool:
                         output_value = str(int(raw_value)).encode()
                     else:
