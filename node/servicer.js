@@ -1,8 +1,9 @@
 const WebSocket = require('ws');
+const uuid = require('node-uuid');
 
 class Client {
   constructor(serverList) {
-    this.callback = null;
+    this.callbacks = {};
     this.functions = {};
     this.isConnected = false;
     this.serverList = serverList;
@@ -11,7 +12,7 @@ class Client {
 
   _responseHandler(data, flags) {
     if (flags.binary) {
-
+      console.log(data);
     }
   }
 
@@ -94,6 +95,7 @@ class Client {
 
         if (!that.isConnected && flags.binary) {
           that.isConnected = true;
+          this.socketErrorCount = 0;
           console.log(`[${ws.url}] - Connected`);
           ws.on('message', that._responseHandler);
 
@@ -104,6 +106,8 @@ class Client {
             url: ws.url,
             functions: that.functions
           });
+        } else {
+          this.socketErrorCount++;
         }
 
         ws = null;
@@ -113,38 +117,105 @@ class Client {
 
   callFunction(functionName, functionInputs, cb) {
     if (this.functions.hasOwnProperty(functionName)) {
-      const functionInputKeys = Object.keys(functionInputs);
+      const packetId = uuid.v4();
+      let packetHeader = `@j|n:${functionName},d:${packetId}`;
+      let packetBody = null;
 
+      this.callbacks[packetId] = cb;
+
+      const functionInputKeys = Object.keys(functionInputs);
       for (let i = 0; i < functionInputKeys.length; i++) {
         const inputName = functionInputKeys[i];
-        const inputType = functionInputs[inputName];
+        const rawInputValue = functionInputs[inputName];
 
         if (this.functions[functionName].inputs.hasOwnProperty(inputName)) {
+          const inputSchema = this.functions[functionName].inputs[inputName];
+          let inputValue = null;
 
+          if (inputSchema === 'string') {
+            if (typeof rawInputValue === 'string') {
+              inputValue = stringToBinary(rawInputValue, rawInputValue.length);
+            } else {
+              cb('Invalid input type', null);
+              return;
+            }
+          } else if (inputSchema === 'integer') {
+            if (typeof rawInputValue === 'number' && Number.isInteger(rawInputValue)) {
+              const intStr = rawInputValue.toString();
+              inputValue = stringToBinary(intStr, intStr.length);
+            } else {
+              cb('Invalid input type', null);
+              return;
+            }
+          } else if (inputSchema === 'float') {
+            if (typeof rawInputValue === 'number' && !Number.isInteger(rawInputValue)) {
+              const floatStr = rawInputValue.toString();
+              inputValue = stringToBinary(floatStr, floatStr.length);
+            } else {
+              cb('Invalid input type', null);
+              return;
+            }
+          } else if (inputSchema === 'boolean') {
+            if (typeof rawInputValue === 'boolean') {
+              const boolStr = (rawInputValue | 0).toString();
+              inputValue = stringToBinary(boolStr, boolStr.length);
+            } else {
+              cb('Invalid input type', null);
+              return;
+            }
+          } else if (inputSchema === 'binary') {
+            if (typeof rawInputValue === 'object') {
+              inputValue = rawInputValue;
+            } else {
+              cb('Invalid input type', null);
+              return;
+            }
+
+            const inputSize = inputValue.length;
+            const inputHeaderStr = `i:${inputName},t:${inputSchema},s:${inputSize}`;
+            const inputHeader = stringToBinary(inputHeaderStr, self.headerSize);
+            const inputBuffer = concatBuffers(inputHeader, inputValue);
+
+            if (packetBody) {
+              packetBody = concatBuffers(packetBody, inputBuffer);
+            } else {
+              packetBody = inputBuffer;
+            }
+          } else {
+            cb('Invalid input type', null);
+            return;
+          }
         } else {
           cb('Invalid function input', null);
+          return;
         }
       }
     } else {
       cb('Invalid function input', null);
+      return;
     }
 
-    // this.ws.send(stringToBinary('Hello'), {
-    //   binary: true,
-    //   mask: true
-    // });
+    const packetSize = packetBody.length;
+    packetHeader += `,s:${packetSize}`;
+    packetHeader = stringToBinary(packetHeader, self.headerSize);
+
+    const packet = concatBuffers(packetHeader, packetBody);
+    this.ws.send(packet, {
+      binary: true,
+      mask: true
+    });
   }
 }
 
 function shuffleArray(a) {
   for (let i = a.length; i; i--) {
-    let j = Math.floor(Math.random() * i);
+    const j = Math.floor(Math.random() * i);
     [a[i - 1], a[j]] = [a[j], a[i - 1]];
   }
 }
 
 function concatBuffers(buffer1, buffer2) {
-  let newBuffer = new Uint8ClampedArray(buffer1.length + buffer2.length);
+  const newBuffer = new Uint8ClampedArray(buffer1.length + buffer2.length);
   newBuffer.set(buffer1);
   newBuffer.set(buffer2, buffer1.length);
   return newBuffer;
@@ -154,14 +225,14 @@ function binaryToString(buf) {
   return String.fromCharCode.apply(null, new Uint8ClampedArray(buf));
 }
 
-function stringToBinary(str) {
-  if (str.length > HEADER_SIZE) {
-    console.error('Header exceeds ${HEADER_SIZE} bytes');
+function stringToBinary(str, padding) {
+  if (str.length > padding) {
+    console.error(`Header exceeds ${padding} bytes`);
   }
 
-  let buf = new Uint8ClampedArray(HEADER_SIZE);
+  const buf = new Uint8ClampedArray(padding);
   for (let i = 0; i < str.length; i++) {
-    let charCode = str.charCodeAt(i);
+    const charCode = str.charCodeAt(i);
 
     if (charCode > 127) {
       console.error('Text must be ASCII');

@@ -14,7 +14,11 @@ client.connect((err, serverInfo) => {
     client.callFunction('classify_jpg', {
       image: 'test'
     }, (err, results) => {
-
+      if (err) {
+        console.log(err);
+      } else {
+        console.log(results);
+      }
     });
   }
 });
