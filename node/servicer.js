@@ -1,5 +1,5 @@
 const WebSocket = require('ws');
-const uuid = require('node-uuid');
+const shortid = require('shortid');
 
 class Client {
   constructor(serverList) {
@@ -10,9 +10,123 @@ class Client {
     shuffleArray(this.serverList);
   }
 
-  _responseHandler(data, flags) {
+  _readResponseHeader(response) {
+    const responseHeader = binaryToString(response.subarray(0, this.headerSize)).split('|');
+    if (responseHeader[0] === '@r') {
+      const responseHeaderParams = responseHeader[1].split(',');
+      let responseId = null;
+      let responseName = null;
+      let responseSize = null;
+
+      for (let i = 0; i < responseHeaderParams.length; i++) {
+        const param = responseHeaderParams[i].split(':');
+
+        if (param[0] === 'n') {
+          responseName = param[1].trim();
+        } else if (param[0] === 's') {
+          responseSize = parseInt(param[1].trim(), 10);
+        } else if (param[0] === 'd') {
+          responseId = param[1].trim();
+        }
+      }
+
+      if (responseId && responseName && responseSize) {
+        return {
+          id: responseId,
+          name: responseName,
+          size: responseSize
+        }
+      } else {
+        console.log('Server sent invalid response');
+      }
+    } else {
+      console.log('Server sent invalid response');
+    }
+  }
+
+  _readResponseParams(response, responseHeader) {
+    const outputSchema = this.functions[responseHeader.name].outputs;
+    const outputs = {};
+    let offset = 0;
+    let bytesRead = 0;
+
+    for (let i = 0; i < Object.keys(outputSchema).length; i++) {
+      const startPos = this.headerSize + offset + (i * this.headerSize);
+      const endPos = startPos + this.headerSize;
+      const parameters = binaryToString(response.subarray(startPos, endPos)).split(',');
+      bytesRead += this.headerSize;
+
+      let outputName = null;
+      let outputType = null;
+      let outputSize = null;
+
+      for (let j = 0; j < parameters.length; j++) {
+        const param = parameters[j].split(':');
+
+        if (param[0] === 'o') {
+          outputName = param[1].trim();
+        } else if (param[0] === 's') {
+          outputSize = parseInt(param[1].trim(), 10);
+        } else if (param[0] === 't') {
+          outputType = param[1].trim();
+        }
+      }
+
+      if (outputName && outputType && outputSize) {
+        if (!outputSchema.hasOwnProperty(outputName) || outputType !== outputSchema[outputName]) {
+          console.log('Invalid input parameter');
+          return null;
+        }
+
+        offset += outputSize;
+        bytesRead += outputSize;
+
+        const rawOutputData = response.subarray(endPos, endPos + outputSize);
+        let outputData = null;
+
+        if (outputType === 'string') {
+          outputData = binaryToString(rawOutputData).trim();
+        } else if (outputType === 'integer') {
+          outputData = parseInt(binaryToString(rawOutputData).trim(), 10);
+        } else if (outputType === 'float') {
+          outputData = parseFloat(binaryToString(rawOutputData).trim());
+        } else if (outputType === 'boolean') {
+          outputData = (binaryToString(rawOutputData).trim() === '1');
+        } else if (outputType === 'binary') {
+          outputData = rawOutputData;
+        }
+
+        if (outputData) {
+          outputs[outputName] = outputData;
+        } else {
+          console.log('Invalid response type');
+          return null;
+        }
+      } else {
+        console.log('Missing response parameter');
+        return null;
+      }
+    }
+
+    return {
+      outputs: outputs,
+      bytesRead: bytesRead
+    }
+  }
+
+  _responseHandler(response, flags) {
     if (flags.binary) {
-      console.log(binaryToString(data));
+      const responseHeader = this._readResponseHeader(response);
+      // TODO Check respone
+      const responseParams = this._readResponseParams(response, responseHeader);
+      // TODO Check inputs
+      // TODO Check size
+
+      // TODO Pass errors to callback
+      this.callbacks[responseHeader.id](null, responseParams.outputs);
+      delete this.callbacks[responseHeader.id];
+    } else {
+      console.log('Server sent invalid response');
     }
   }
 
@@ -97,10 +211,10 @@ class Client {
           that.isConnected = true;
           this.socketErrorCount = 0;
           console.log(`[${ws.url}] - Connected`);
-          ws.on('message', that._responseHandler);
-
-          that.ws = ws;
           that._decodeHeader(data);
+
+          ws.on('message', that._responseHandler.bind(that));
+          that.ws = ws;
 
           cb(null, {
             url: ws.url,
@@ -117,7 +231,7 @@ class Client {
 
   callFunction(functionName, functionInputs, cb) {
     if (this.functions.hasOwnProperty(functionName)) {
-      const packetId = uuid.v4();
+      const packetId = shortid.generate();
       let packetHeader = `@j|n:${functionName},d:${packetId}`;
       let packetBody = null;
 
@@ -170,23 +284,20 @@ class Client {
               cb('Invalid input type', null);
               return;
             }
+          }
 
-            const inputSize = inputValue.length;
-            const inputHeaderStr = `i:${inputName},t:${inputSchema},s:${inputSize}`;
-            const inputHeader = stringToBinary(inputHeaderStr, this.headerSize);
-            const inputBuffer = concatBuffers(inputHeader, inputValue);
+          const inputSize = inputValue.length;
+          const inputHeaderStr = `i:${inputName},t:${inputSchema},s:${inputSize}`;
+          const inputHeader = stringToBinary(inputHeaderStr, this.headerSize);
+          const inputBuffer = concatBuffers(inputHeader, inputValue);
 
-            if (packetBody) {
-              packetBody = concatBuffers(packetBody, inputBuffer);
-            } else {
-              packetBody = inputBuffer;
-            }
+          if (packetBody) {
+            packetBody = concatBuffers(packetBody, inputBuffer);
           } else {
-            cb('Invalid input type', null);
-            return;
+            packetBody = inputBuffer;
           }
         } else {
-          cb('Invalid function input', null);
+          cb('Invalid input type', null);
           return;
         }
       }
@@ -205,6 +316,7 @@ class Client {
       return;
     }
   }
+
 }
 
 function shuffleArray(a) {

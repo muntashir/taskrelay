@@ -39,7 +39,7 @@ class Server:
         bytes_read = 0
         inputs = {}
 
-        for i, input in enumerate(input_schema):
+        for i, _ in enumerate(input_schema):
             start_pos = self.header_size + offset + (i * self.header_size)
             end_pos = start_pos + self.header_size
             parameters = request[start_pos:end_pos].decode('ascii').split(',')
@@ -67,10 +67,10 @@ class Server:
                     print('Invalid input')
                     return (None, None)
 
-                offset += input_size + 1
+                offset += input_size
                 bytes_read += input_size
 
-                raw_input_data = request[end_pos:input_size + 1]
+                raw_input_data = request[end_pos:end_pos + input_size]
                 input_data = None
 
                 if input_type == 'string':
@@ -121,7 +121,7 @@ class Server:
                         output_value = str(raw_value).encode()
                     else:
                         print('Output value does not match schema')
-                        return 
+                        return
                 elif type_schema == 'float':
                     if type(raw_value) is float:
                         output_value = str(raw_value).encode()
