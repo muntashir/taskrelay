@@ -35,12 +35,16 @@ class Client {
           id: responseId,
           name: responseName,
           size: responseSize
-        }
+        };
       } else {
-        console.log('Server sent invalid response');
+        return {
+          error: 'Server sent invalid response'
+        };
       }
     } else {
-      console.log('Server sent invalid response');
+      return {
+        error: 'Server sent invalid response'
+      };
     }
   }
 
@@ -74,8 +78,9 @@ class Client {
 
       if (outputName && outputType && outputSize) {
         if (!outputSchema.hasOwnProperty(outputName) || outputType !== outputSchema[outputName]) {
-          console.log('Invalid input parameter');
-          return null;
+          return {
+            error: 'Invalid input parameter'
+          };
         }
 
         offset += outputSize;
@@ -99,31 +104,59 @@ class Client {
         if (outputData) {
           outputs[outputName] = outputData;
         } else {
-          console.log('Invalid response type');
-          return null;
+          return {
+            error: 'Invalid response type'
+          };
         }
       } else {
-        console.log('Missing response parameter');
-        return null;
+        return {
+          error: 'Missing response parameter'
+        };
       }
     }
 
     return {
       outputs: outputs,
       bytesRead: bytesRead
-    }
+    };
   }
 
   _responseHandler(response, flags) {
     if (flags.binary) {
       const responseHeader = this._readResponseHeader(response);
-      // TODO Check respone
-      const responseParams = this._readResponseParams(response, responseHeader);
-      // TODO Check inputs
-      // TODO Check size
+      if (responseHeader && responseHeader.hasOwnProperty('error')) {
+        console.log(responseHeader['error']);
+        return;
+      } else if (!responseHeader) {
+        console.log('Invalid response format');
+        return;
+      }
 
-      // TODO Pass errors to callback
-      this.callbacks[responseHeader.id](null, responseParams.outputs);
+      let callback = null;
+      if (this.callbacks.hasOwnProperty(responseHeader.id)) {
+        callback = this.callbacks[responseHeader.id];
+      } else {
+        console.log('Invalid response ID');
+        return;
+      }
+
+      let error = null;
+      const responseParams = this._readResponseParams(response, responseHeader);
+      if (responseParams && responseParams.hasOwnProperty(error)) {
+        error = responseParams.error;
+      } else if (!responseParams) {
+        error = 'Invalid response';
+      }
+
+      if (responseParams.bytesRead !== responseHeader.size) {
+        error = 'Invalid packet size';
+      }
+
+      let callbackParams = null;
+      if (!error && responseParams.hasOwnProperty('outputs')) {
+        callbackParams = responseParams.outputs;
+      }
+      callback(error, callbackParams);
       delete this.callbacks[responseHeader.id];
     } else {
       console.log('Server sent invalid response');
