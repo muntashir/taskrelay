@@ -8,12 +8,12 @@ class Server:
         self.functions = {}
         self.bytes_read = 0
 
-    async def __get_job_info(request):
+    async def __get_job_info(self, request):
         packet_name = None
         packet_size = None
         packet_id = None
 
-        sections = request[0:self.header_size + 1].decode('ascii').split('|')
+        sections = request[0:self.header_size].decode('ascii').split('|')
 
         if sections[0] == '@j':
             parameters = sections[1].split(',')
@@ -22,27 +22,27 @@ class Server:
                 parameter_tuple = parameter.split(':')
 
                 if parameter_tuple[0] == 'n':
-                    packet_name = parameter_tuple[1]
+                    packet_name = parameter_tuple[1].replace('\x00', '')
                 elif parameter_tuple[0] == 's':
-                    packet_size = int(parameter_tuple[1])
+                    packet_size = int(parameter_tuple[1].replace('\x00', ''))
                 elif parameter_tuple[0] == 'd':
-                    packet_id = parameter_tuple[1]
+                    packet_id = parameter_tuple[1].replace('\x00', '')
                 else:
                     print('Invalid header parameter sent')
 
         return (packet_name, packet_size, packet_id)
 
-    async def __get_inputs(request, packet_name):
+    async def __get_inputs(self, request, packet_name):
         input_schema = self.functions[packet_name]['inputs']
         offset = 0
         bytes_read = 0
         inputs = {}
 
         for i, input in enumerate(input_schema):
-            start_pos = self.header_size + 1 + offset + (i * self.header_size)
-            end_pos = start_pos + self.header_size + 1
+            start_pos = self.header_size + offset + (i * self.header_size)
+            end_pos = start_pos + self.header_size
             parameters = request[start_pos:end_pos].decode('ascii').split(',')
-            bytes_read += header_size
+            bytes_read += self.header_size
 
             input_name = None
             input_type = None
@@ -52,11 +52,11 @@ class Server:
                 parameter_tuple = parameter.split(':')
 
                 if parameter_tuple[0] == 'i':
-                    input_name = parameter_tuple[1]
+                    input_name = parameter_tuple[1].replace('\x00', '')
                 elif parameter_tuple[0] == 't':
-                    input_type = parameter_tuple[1]
+                    input_type = parameter_tuple[1].replace('\x00', '')
                 elif parameter_tuple[0] == 's':
-                    input_size = int(parameter_tuple[1])
+                    input_size = int(parameter_tuple[1].replace('\x00', ''))
                 else:
                     print('Invalid input parameter sent')
                     return (None, None)
@@ -101,7 +101,7 @@ class Server:
 
         for output_name, raw_value in outputs.items():
             if output_name in output_schema:
-                type_schema = output_name[output_schema]
+                type_schema = output_schema[output_name]
                 output_value = None
                 if type_schema == 'string':
                     if type(raw_value) is str:
@@ -165,10 +165,10 @@ class Server:
             return b'@e|m:invalid_job_request'
 
         inputs, bytes_read = await self.__get_inputs(request, packet_name)
-        if not inputs or bytes_read:
+        if not inputs or not bytes_read:
             return b'@e|m:invalid_inputs'
 
-        if (bytes_read + self.header_size != packet_size):
+        if (bytes_read != packet_size):
             return b'@e|m:invalid_packet_size'
 
         outputs = self.functions[packet_name]['function'](**inputs)

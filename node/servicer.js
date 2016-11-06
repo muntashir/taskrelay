@@ -12,7 +12,7 @@ class Client {
 
   _responseHandler(data, flags) {
     if (flags.binary) {
-      console.log(data);
+      console.log(binaryToString(data));
     }
   }
 
@@ -173,7 +173,7 @@ class Client {
 
             const inputSize = inputValue.length;
             const inputHeaderStr = `i:${inputName},t:${inputSchema},s:${inputSize}`;
-            const inputHeader = stringToBinary(inputHeaderStr, self.headerSize);
+            const inputHeader = stringToBinary(inputHeaderStr, this.headerSize);
             const inputBuffer = concatBuffers(inputHeader, inputValue);
 
             if (packetBody) {
@@ -190,20 +190,20 @@ class Client {
           return;
         }
       }
+
+      const packetSize = packetBody.length;
+      packetHeader += `,s:${packetSize}`;
+      packetHeader = stringToBinary(packetHeader, this.headerSize);
+
+      const packet = concatBuffers(packetHeader, packetBody);
+      this.ws.send(packet, {
+        binary: true,
+        mask: true
+      });
     } else {
       cb('Invalid function input', null);
       return;
     }
-
-    const packetSize = packetBody.length;
-    packetHeader += `,s:${packetSize}`;
-    packetHeader = stringToBinary(packetHeader, self.headerSize);
-
-    const packet = concatBuffers(packetHeader, packetBody);
-    this.ws.send(packet, {
-      binary: true,
-      mask: true
-    });
   }
 }
 
