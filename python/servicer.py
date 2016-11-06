@@ -151,7 +151,7 @@ class Server:
                 print('Invalid function output')
                 return None
 
-        packet_header += b',s:' + str(len(output_packet) + self.header_size).encode()
+        packet_header += b',s:' + str(len(output_packet)).encode()
 
         if len(packet_header) > self.header_size:
             print('Packer header too big')
