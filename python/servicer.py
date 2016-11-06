@@ -30,6 +30,7 @@ class Server:
                 else:
                     print('Invalid header parameter sent')
 
+        print('Incoming job request: %s' % packet_name)
         return (packet_name, packet_size, packet_id)
 
     async def __get_inputs(self, request, packet_name):
@@ -157,6 +158,7 @@ class Server:
             return None
         else:
             output_packet = packet_header.ljust(self.header_size) + output_packet
+            print('Done processing requst: %s' % packet_name)
             return output_packet
 
     async def __process_incoming_message(self, request):
