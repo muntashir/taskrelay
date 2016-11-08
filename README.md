@@ -6,6 +6,8 @@ A library to run tasks on remote servers. Currently only has a Python 3.5 server
 
 You can pass in multiple inputs and get back multiple outputs. See the examples to learn how to do this. You can also have multiple servers and the client will choose one to connect to.
 
+All data is sent as binary through WebSockets. Read the [specification](https://github.com/muntashir/taskrelay/blob/master/protocol.md) for more information.
+
 ## Installation
 ### Python 3.5
 `pip3 install taskrelay`
@@ -47,7 +49,6 @@ client = new taskrelay.Client([
   ['127.0.0.1', 1234],
   ['127.0.0.1', 5678] // Only one of these will be used
 ]);
-
 
 client.connect((err, serverInfo) => {
   if (err) {
