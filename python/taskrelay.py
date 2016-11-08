@@ -196,7 +196,7 @@ class Server:
             response = await self.__process_incoming_message(request)
             await websocket.send(response)
 
-    def add_function(self, **kwargs):
+    def create_task(self, **kwargs):
         name = kwargs.get('name', None)
         if not name:
             print('Function name must be provided')

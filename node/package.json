@@ -1,8 +1,8 @@
 {
-  "name": "servicer",
-  "version": "1.0.0",
+  "name": "taskrelay",
+  "version": "0.9.0",
   "description": "",
-  "main": "servicer.js",
+  "main": "taskrelay.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

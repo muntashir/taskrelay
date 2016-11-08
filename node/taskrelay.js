@@ -262,7 +262,7 @@ class Client {
     }
   }
 
-  callFunction(functionName, functionInputs, cb) {
+  runTask(functionName, functionInputs, cb) {
     if (this.functions.hasOwnProperty(functionName)) {
       const packetId = shortid.generate();
       let packetHeader = `@j|n:${functionName},d:${packetId}`;
