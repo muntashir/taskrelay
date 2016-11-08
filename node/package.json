@@ -1,16 +1,25 @@
 {
   "name": "taskrelay",
-  "version": "0.9.0",
-  "description": "",
+  "version": "0.1.0",
+  "description": "A library to run tasks on remote servers",
   "main": "taskrelay.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "https://github.com/muntashir",
+  "license": "MIT",
   "dependencies": {
     "bufferutil": "^1.2.1",
     "shortid": "^2.2.6",
     "ws": "^1.1.1"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muntashir/taskrelay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/muntashir/taskrelay/issues"
+  },
+  "homepage": "https://github.com/muntashir/taskrelay#readme"
 }
