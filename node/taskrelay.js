@@ -38,12 +38,13 @@ class Client {
         };
       } else {
         return {
-          error: 'Server sent invalid response'
+          error: 'Missing a response parameter'
         };
       }
     } else {
+      console.log(responseHeader);
       return {
-        error: 'Server sent invalid response'
+        error: 'Header does not begin with @r'
       };
     }
   }
@@ -101,7 +102,7 @@ class Client {
           outputData = rawOutputData;
         }
 
-        if (outputData) {
+        if (outputData !== null) {
           outputs[outputName] = outputData;
         } else {
           return {
@@ -283,7 +284,7 @@ class Client {
             if (typeof rawInputValue === 'string') {
               inputValue = stringToBinary(rawInputValue, rawInputValue.length);
             } else {
-              cb('Invalid input type', null);
+              cb('Invalid string input type', null);
               return;
             }
           } else if (inputSchema === 'integer') {
@@ -291,7 +292,7 @@ class Client {
               const intStr = rawInputValue.toString();
               inputValue = stringToBinary(intStr, intStr.length);
             } else {
-              cb('Invalid input type', null);
+              cb('Invalid integer input type', null);
               return;
             }
           } else if (inputSchema === 'float') {
@@ -299,7 +300,7 @@ class Client {
               const floatStr = rawInputValue.toString();
               inputValue = stringToBinary(floatStr, floatStr.length);
             } else {
-              cb('Invalid input type', null);
+              cb('Invalid float input type', null);
               return;
             }
           } else if (inputSchema === 'boolean') {
@@ -307,19 +308,22 @@ class Client {
               const boolStr = (rawInputValue | 0).toString();
               inputValue = stringToBinary(boolStr, boolStr.length);
             } else {
-              cb('Invalid input type', null);
+              cb('Invalid boolean input type', null);
               return;
             }
           } else if (inputSchema === 'binary') {
             if (typeof rawInputValue === 'object') {
               inputValue = rawInputValue;
             } else {
-              cb('Invalid input type', null);
+              cb('Invalid binary input type', null);
               return;
             }
           }
 
           const inputSize = inputValue.length;
+          if (inputSize === 0 || !inputValue) {
+            cb('Input is empty', null);
+          }
           const inputHeaderStr = `i:${inputName},t:${inputSchema},s:${inputSize}`;
           const inputHeader = stringToBinary(inputHeaderStr, this.headerSize);
           const inputBuffer = concatBuffers(inputHeader, inputValue);
@@ -330,7 +334,7 @@ class Client {
             packetBody = inputBuffer;
           }
         } else {
-          cb('Invalid input type', null);
+          cb('Input does not exist', null);
           return;
         }
       }
@@ -348,6 +352,10 @@ class Client {
       cb('Invalid function input', null);
       return;
     }
+  }
+
+  close() {
+    this.ws.close();
   }
 
 }

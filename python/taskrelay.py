@@ -82,15 +82,18 @@ class Server:
                 elif input_type == 'float':
                     input_data = float(raw_input_data)
                 elif input_type == 'boolean':
-                    input_data = bool(raw_input_data)
+                    input_data = (raw_input_data.decode('ascii') == '1')
 
-                if input_data:
+                if input_data is not None:
                     inputs[input_name] = input_data
                 else:
                     print('Invalid input type')
                     return(None, None)
             else:
                 print('Missing input parameter')
+                print('|-input_name %s' % input_name)
+                print('|-input_type %s' % input_type)
+                print('|-input_size %s' % input_size)
                 return (None, None)
 
         return (inputs, bytes_read)
@@ -108,31 +111,36 @@ class Server:
                     if type(raw_value) is str:
                         output_value = raw_value.encode()
                     else:
-                        print('Output value does not match schema')
+                        print('Output value string does not match schema')
+                        print(raw_value)
                         return None
                 elif type_schema == 'binary':
                     if type(raw_value) is bytes:
                         output_value = raw_value
                     else:
-                        print('Output value does not match schema')
+                        print('Output value binary does not match schema')
+                        print(raw_value)
                         return None
                 elif type_schema == 'integer':
                     if type(raw_value) is int:
                         output_value = str(raw_value).encode()
                     else:
-                        print('Output value does not match schema')
+                        print('Output value integer does not match schema')
+                        print(raw_value)
                         return
                 elif type_schema == 'float':
                     if type(raw_value) is float:
                         output_value = str(raw_value).encode()
                     else:
-                        print('Output value does not match schema')
+                        print('Output value float does not match schema')
+                        print(raw_value)
                         return None
                 elif type_schema == 'boolean':
                     if type(raw_value) is bool:
                         output_value = str(int(raw_value)).encode()
                     else:
-                        print('Output value does not match schema')
+                        print('Output value boolean does not match schema')
+                        print(raw_value)
                         return None
                 else:
                     print('Output schema invalid')
@@ -148,7 +156,7 @@ class Server:
                 else:
                     output_packet += output_header.ljust(self.header_size) + output_value
             else:
-                print('Invalid function output')
+                print('Invalid function output for %s()' % packet_name)
                 return None
 
         packet_header += b',s:' + str(len(output_packet)).encode()
@@ -192,9 +200,13 @@ class Server:
     async def __handler(self, websocket, _):
         await websocket.send(self.welcome_message)
         while True:
-            request = await websocket.recv()
-            response = await self.__process_incoming_message(request)
-            await websocket.send(response)
+            try:
+                request = await websocket.recv()
+                response = await self.__process_incoming_message(request)
+                await websocket.send(response)
+            except websockets.exceptions.ConnectionClosed as err:
+                print(err)
+                break
 
     def create_task(self, **kwargs):
         name = kwargs.get('name', None)
